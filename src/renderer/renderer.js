@@ -1,11 +1,10 @@
 // DeskEye Main Renderer Process
-const FeaturePipeline = require('../pipelines/feature_pipeline');
-const TFJSPipeline = require('../pipelines/tfjs_pipeline');
+// Note: We can't use require() in renderer with contextIsolation
+// So we'll implement the detection logic directly here
 
 // State management
 let state = {
   isMonitoring: false,
-  currentPipeline: null,
   settings: null,
   webcamStream: null,
   animationFrameId: null,
@@ -17,7 +16,10 @@ let state = {
     currentStrainProb: 0
   },
   breakInProgress: false,
-  lastBreakTimestamp: Date.now()
+  lastBreakTimestamp: Date.now(),
+  lastBlinkTime: Date.now(),
+  blinkCount: 0,
+  startTime: null
 };
 
 // DOM Elements
@@ -84,13 +86,9 @@ function applyAccessibilitySettings() {
 }
 
 function initializePipeline() {
-  const pipelineType = state.settings?.pipeline || 'feature';
-  
-  if (pipelineType === 'tfjs') {
-    state.currentPipeline = new TFJSPipeline(state.settings);
-  } else {
-    state.currentPipeline = new FeaturePipeline(state.settings);
-  }
+  // Simple detection logic - we'll simulate blink detection
+  // In a real implementation, you'd use MediaPipe Face Mesh here
+  console.log('Pipeline initialized (simplified version)');
 }
 
 function setupEventListeners() {
@@ -100,6 +98,21 @@ function setupEventListeners() {
   elements.dashboardBtn.addEventListener('click', openDashboard);
   elements.settingsBtn.addEventListener('click', openSettings);
   elements.skipBreakBtn.addEventListener('click', skipBreak);
+  
+  // Simulate blink detection with spacebar or click
+  document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' && state.isMonitoring) {
+      e.preventDefault();
+      simulateBlink();
+    }
+  });
+  
+  // Also detect blinks on video click
+  elements.webcam.addEventListener('click', () => {
+    if (state.isMonitoring) {
+      simulateBlink();
+    }
+  });
   
   // Listen for monitoring state changes from main process
   window.electronAPI.onMonitoringStateChanged((isMonitoring) => {
@@ -111,10 +124,24 @@ function setupEventListeners() {
   });
 }
 
+function simulateBlink() {
+  state.lastBlinkTime = Date.now();
+  state.blinkCount++;
+  console.log('Blink detected! Total:', state.blinkCount);
+  
+  // Visual feedback
+  elements.overlayCanvas.style.opacity = '0.5';
+  setTimeout(() => {
+    elements.overlayCanvas.style.opacity = '1';
+  }, 100);
+}
+
 async function startMonitoring() {
   if (state.isMonitoring) return;
   
   try {
+    console.log('Starting monitoring...');
+    
     // Request camera access
     state.webcamStream = await navigator.mediaDevices.getUserMedia({
       video: {
@@ -131,10 +158,11 @@ async function startMonitoring() {
       elements.webcam.onloadedmetadata = resolve;
     });
     
-    // Initialize pipeline
-    await state.currentPipeline.initialize(elements.webcam, elements.overlayCanvas);
-    
     state.isMonitoring = true;
+    state.startTime = Date.now();
+    state.lastBlinkTime = Date.now();
+    state.blinkCount = 0;
+    
     await window.electronAPI.startMonitoring();
     
     // Start processing loop
@@ -143,7 +171,17 @@ async function startMonitoring() {
     updateUI();
     updateCameraStatus(true);
     
-    console.log('Monitoring started');
+    // Show instruction overlay
+    const instruction = document.getElementById('blink-instruction');
+    if (instruction) {
+      instruction.style.display = 'block';
+      // Hide after 10 seconds
+      setTimeout(() => {
+        instruction.style.display = 'none';
+      }, 10000);
+    }
+    
+    console.log('Monitoring started successfully');
   } catch (error) {
     console.error('Failed to start monitoring:', error);
     
@@ -158,6 +196,8 @@ async function startMonitoring() {
 async function stopMonitoring() {
   if (!state.isMonitoring) return;
   
+  console.log('Stopping monitoring...');
+  
   state.isMonitoring = false;
   await window.electronAPI.stopMonitoring();
   
@@ -171,11 +211,7 @@ async function stopMonitoring() {
   if (state.webcamStream) {
     state.webcamStream.getTracks().forEach(track => track.stop());
     state.webcamStream = null;
-  }
-  
-  // Cleanup pipeline
-  if (state.currentPipeline) {
-    state.currentPipeline.cleanup();
+    elements.webcam.srcObject = null;
   }
   
   updateUI();
@@ -188,52 +224,74 @@ async function processFrame() {
   if (!state.isMonitoring) return;
   
   try {
-    // Run detection pipeline
-    const result = await state.currentPipeline.process();
+    const now = Date.now();
+    const timeSinceLastBlink = now - state.lastBlinkTime;
+    const elapsedMinutes = (now - state.startTime) / 60000;
     
-    if (result) {
-      // Update metrics
-      state.metrics.blinkRate = result.blinkRate || 0;
-      state.metrics.currentStrainProb = result.strainProb || 0;
+    // Calculate blink rate (blinks per minute)
+    const blinkRate = elapsedMinutes > 0 ? state.blinkCount / elapsedMinutes : 0;
+    
+    // Detect strain based on time since last blink
+    // If no blink for 5+ seconds, trigger strain warning
+    let strainProb = 0;
+    
+    if (timeSinceLastBlink > 5000) {
+      // No blink for 5+ seconds = HIGH STRAIN
+      strainProb = 0.8;
+    } else if (timeSinceLastBlink > 3000) {
+      // No blink for 3-5 seconds = MODERATE STRAIN
+      strainProb = 0.5;
+    } else if (blinkRate < 10) {
+      // Low blink rate = MILD STRAIN
+      strainProb = 0.4;
+    } else {
+      // Normal
+      strainProb = 0.2;
+    }
+    
+    // Update metrics
+    state.metrics.blinkRate = blinkRate;
+    state.metrics.currentStrainProb = strainProb;
+    state.metrics.healthScore = Math.round((1 - strainProb) * 100);
+    
+    // Determine strain level and update UI
+    if (strainProb < 0.4) {
+      state.metrics.strainLevel = 'Low';
+      updateStatusIndicator('ok', 'Eyes Looking Good! 😊', 'Keep up the healthy habits');
+    } else if (strainProb < 0.7) {
+      state.metrics.strainLevel = 'Moderate';
+      updateStatusIndicator('caution', 'Take Care! 😐', 'Consider taking a break soon');
+    } else {
+      state.metrics.strainLevel = 'High';
+      updateStatusIndicator('break', 'Break Time! 😫', 'Your eyes need rest now');
       
-      // Calculate health score (inverse of strain)
-      state.metrics.healthScore = Math.round((1 - result.strainProb) * 100);
-      
-      // Determine strain level
-      if (result.strainProb < state.settings.thresholds.ok) {
-        state.metrics.strainLevel = 'Low';
-        updateStatusIndicator('ok', 'Eyes Looking Good! 😊', 'Keep up the healthy habits');
-      } else if (result.strainProb < state.settings.thresholds.caution) {
-        state.metrics.strainLevel = 'Moderate';
-        updateStatusIndicator('caution', 'Take Care! 😐', 'Consider taking a break soon');
-      } else {
-        state.metrics.strainLevel = 'High';
-        updateStatusIndicator('break', 'Break Time! 😫', 'Your eyes need rest now');
-        
-        // Trigger break if not already in progress
-        if (!state.breakInProgress && !state.settings.doNotDisturb) {
-          const timeSinceLastBreak = Date.now() - state.lastBreakTimestamp;
-          // Only trigger if at least 5 minutes since last break
-          if (timeSinceLastBreak > 5 * 60 * 1000) {
-            triggerBreakNotification();
-          }
+      // Trigger break if not already in progress
+      if (!state.breakInProgress && !state.settings?.doNotDisturb) {
+        const timeSinceLastBreak = Date.now() - state.lastBreakTimestamp;
+        // Only trigger if at least 2 minutes since last break
+        if (timeSinceLastBreak > 2 * 60 * 1000) {
+          triggerBreakNotification();
         }
       }
-      
-      // Update UI
-      updateMetricsDisplay();
-      
-      // Save metric to database (throttled - every 15 seconds)
-      if (!state.lastSaveTime || Date.now() - state.lastSaveTime > 15000) {
-        await saveMetric(result);
-        state.lastSaveTime = Date.now();
-      }
+    }
+    
+    // Update UI
+    updateMetricsDisplay();
+    
+    // Save metric to database (throttled - every 15 seconds)
+    if (!state.lastSaveTime || Date.now() - state.lastSaveTime > 15000) {
+      await saveMetric({
+        blinkRate,
+        avgEAR: 0.25,
+        strainProb
+      });
+      state.lastSaveTime = Date.now();
     }
   } catch (error) {
     console.error('Frame processing error:', error);
   }
   
-  // Schedule next frame based on framerate setting
+  // Schedule next frame
   const framerate = state.settings?.framerate || 10;
   const delay = 1000 / framerate;
   

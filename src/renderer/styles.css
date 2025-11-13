@@ -240,6 +240,27 @@ body {
   background: var(--color-success);
 }
 
+.blink-instruction {
+  position: absolute;
+  bottom: var(--spacing-md);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(124, 58, 237, 0.95);
+  color: white;
+  padding: var(--spacing-md);
+  border-radius: var(--radius-md);
+  text-align: center;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.5);
+  animation: slideInUp 0.5s ease-out;
+  z-index: 10;
+}
+
+.blink-instruction strong {
+  color: #FFD700;
+  font-weight: 700;
+}
+
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
