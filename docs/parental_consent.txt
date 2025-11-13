@@ -1,0 +1,217 @@
+================================================================================
+                    DESKEYE - PARENTAL/GUARDIAN CONSENT FORM
+                              For Minors Under 18
+================================================================================
+
+IMPORTANT: This form must be read, understood, and signed by a parent or legal
+guardian before a minor (person under 18 years of age) uses the DeskEye
+application.
+
+================================================================================
+                              CONSENT STATEMENT
+================================================================================
+
+Parental/guardian consent required for minors: This app accesses your webcam
+to analyze eye features (blink rate and eye openness) for the purpose of
+detecting eye strain. No raw video is stored or uploaded by default. If you
+are under 18, you must have a parent or guardian review and sign this consent
+form before testing.
+
+================================================================================
+                           APPLICATION INFORMATION
+================================================================================
+
+Application Name: DeskEye
+Purpose: Educational tool to monitor and reduce digital eye strain
+Developer: Student team (Samsung Solve for Tomorrow project)
+Version: 1.0.0
+
+================================================================================
+                              WHAT THE APP DOES
+================================================================================
+
+DeskEye is designed to help students maintain healthy eyes while using
+computers. The application:
+
+1. Accesses the device's built-in webcam
+2. Detects facial landmarks to locate the eyes
+3. Analyzes eye features including:
+   - Blink rate (how often you blink)
+   - Eye openness (Eye Aspect Ratio)
+   - Time since last break
+4. Calculates an eye strain probability score
+5. Provides visual and audio reminders to take breaks
+6. Stores aggregated health metrics locally on the device
+
+================================================================================
+                              DATA COLLECTION
+================================================================================
+
+WHAT IS COLLECTED:
+- Aggregated eye health metrics (blink rate, strain scores)
+- Timestamps of measurements
+- Break events (when breaks are taken)
+- User preferences and settings
+
+WHAT IS NOT COLLECTED:
+- Raw webcam video or images (unless explicitly enabled by user)
+- Personal identifying information
+- Location data
+- Browsing history or other application data
+
+DATA STORAGE:
+- All data is stored LOCALLY on the device
+- No data is uploaded to any server or cloud service
+- Data can be exported to CSV format
+- Data can be deleted at any time by uninstalling the app
+
+================================================================================
+                              PRIVACY PROTECTION
+================================================================================
+
+DeskEye is designed with privacy as a core principle:
+
+✓ All video processing happens locally on the device
+✓ No raw video is saved by default
+✓ No data is transmitted over the internet
+✓ No third-party tracking or analytics
+✓ User can disable monitoring at any time
+✓ User can delete all data at any time
+
+Optional Feature (DISABLED by default):
+- "Save Raw Images" can be enabled in Settings for debugging
+- If enabled, webcam frames are saved to local storage
+- This feature requires explicit opt-in and shows a warning
+- Saved images can be automatically deleted after a set period
+
+================================================================================
+                              RISKS AND BENEFITS
+================================================================================
+
+POTENTIAL RISKS:
+- Minimal risk, similar to using any webcam application
+- Possible false positives or false negatives in strain detection
+- App is NOT a medical device and does not replace professional eye care
+- Should not be solely relied upon for health decisions
+
+POTENTIAL BENEFITS:
+- May help reduce digital eye strain symptoms
+- Encourages healthy screen time habits
+- Provides awareness of eye health during computer use
+- Educational tool for understanding eye strain
+
+================================================================================
+                           VOLUNTARY PARTICIPATION
+================================================================================
+
+- Use of DeskEye is completely VOLUNTARY
+- Your child can stop using the app at any time
+- There is no penalty for not using or discontinuing use
+- Your child's education is not dependent on using this app
+
+================================================================================
+                              PARENTAL RIGHTS
+================================================================================
+
+As a parent or guardian, you have the right to:
+
+✓ Review all data collected by the application
+✓ Request deletion of all data
+✓ Withdraw consent at any time
+✓ Ask questions about how the app works
+✓ Review the source code (open source project)
+✓ Contact the development team with concerns
+
+================================================================================
+                           CONSENT ACKNOWLEDGMENT
+================================================================================
+
+By signing below, I acknowledge that:
+
+□ I have read and understood this entire consent form
+□ I understand what data the app collects and how it is stored
+□ I understand that all processing happens locally on the device
+□ I understand that no data is uploaded to external servers
+□ I understand the potential risks and benefits
+□ I understand that participation is voluntary
+□ I give permission for my child to use DeskEye
+□ I can withdraw this consent at any time
+
+================================================================================
+                              SIGNATURE SECTION
+================================================================================
+
+Parent/Guardian Full Name: _____________________________________________
+
+Child's Full Name: _____________________________________________________
+
+Relationship to Child: _________________________________________________
+
+Date: __________________________________________________________________
+
+Signature: _____________________________________________________________
+
+
+OPTIONAL - Contact Information (for questions or concerns):
+
+Email: _________________________________________________________________
+
+Phone: _________________________________________________________________
+
+================================================================================
+                           FOR SCHOOL/EDUCATOR USE
+================================================================================
+
+If this consent is being collected by a school or educational institution:
+
+School Name: ___________________________________________________________
+
+Teacher/Administrator Name: ____________________________________________
+
+Class/Grade: ___________________________________________________________
+
+Date Collected: ________________________________________________________
+
+================================================================================
+                              CONTACT INFORMATION
+================================================================================
+
+For questions, concerns, or to withdraw consent:
+
+Project GitHub: https://github.com/yourusername/desk-eye
+Email: deskeye@example.com
+Documentation: See docs/ folder in application directory
+
+================================================================================
+                           ADDITIONAL INFORMATION
+================================================================================
+
+COPPA Compliance (Children Under 13):
+DeskEye does not collect personal information as defined by COPPA. However,
+we still recommend parental consent as a best practice.
+
+FERPA Compliance (Educational Records):
+DeskEye does not create or transmit educational records. All data remains
+on the local device.
+
+Open Source:
+DeskEye is open source software. The complete source code is available for
+review on GitHub.
+
+Not a Medical Device:
+DeskEye is an educational tool and is NOT a medical device. It should not
+be used to diagnose, treat, or prevent any medical condition. Consult an
+eye care professional for medical advice.
+
+================================================================================
+                              KEEP A COPY
+================================================================================
+
+Please keep a copy of this signed consent form for your records.
+
+A digital copy is also available in the application directory:
+docs/parental_consent.txt
+
+================================================================================
+                              END OF FORM
+================================================================================

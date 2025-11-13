@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';">
+  <title>DeskEye - Settings</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .settings-container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 24px;
+      animation: fadeIn 0.5s ease-in;
+    }
+    
+    .settings-section {
+      background: var(--color-surface);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      margin-bottom: 24px;
+      box-shadow: var(--shadow-md);
+      border: 1px solid var(--color-border);
+      animation: slideInUp 0.6s ease-out both;
+      transition: all 0.3s ease;
+    }
+    
+    .settings-section:nth-child(1) { animation-delay: 0.1s; }
+    .settings-section:nth-child(2) { animation-delay: 0.2s; }
+    .settings-section:nth-child(3) { animation-delay: 0.3s; }
+    .settings-section:nth-child(4) { animation-delay: 0.4s; }
+    .settings-section:nth-child(5) { animation-delay: 0.5s; }
+    .settings-section:nth-child(6) { animation-delay: 0.6s; }
+    
+    .settings-section:hover {
+      box-shadow: var(--shadow-glow);
+      border-color: var(--color-primary);
+    }
+    
+    .settings-section h2 {
+      margin-bottom: 16px;
+      color: var(--color-text);
+      font-size: 1.3rem;
+    }
+    
+    .setting-item {
+      margin-bottom: 20px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--color-border);
+    }
+    
+    .setting-item:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+      padding-bottom: 0;
+    }
+    
+    .setting-label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: var(--color-text);
+    }
+    
+    .setting-description {
+      font-size: 0.9rem;
+      color: var(--color-text-secondary);
+      margin-bottom: 12px;
+    }
+    
+    .setting-control {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    
+    select, input[type="number"], input[type="range"] {
+      padding: 10px 14px;
+      border: 2px solid var(--color-border);
+      border-radius: var(--radius-md);
+      font-size: 1rem;
+      background: var(--color-bg-light);
+      color: var(--color-text);
+      transition: all 0.3s ease;
+    }
+    
+    select:focus, input[type="number"]:focus {
+      outline: none;
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1);
+    }
+    
+    select:hover, input[type="number"]:hover {
+      border-color: var(--color-primary-light);
+    }
+    
+    select {
+      min-width: 200px;
+    }
+    
+    input[type="number"] {
+      width: 100px;
+    }
+    
+    input[type="range"] {
+      flex: 1;
+      max-width: 300px;
+    }
+    
+    .range-value {
+      min-width: 50px;
+      font-weight: 600;
+      color: var(--color-primary);
+    }
+    
+    .toggle-switch {
+      position: relative;
+      display: inline-block;
+      width: 60px;
+      height: 34px;
+    }
+    
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: var(--color-border);
+      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      border-radius: 34px;
+    }
+    
+    .toggle-slider:before {
+      position: absolute;
+      content: "";
+      height: 26px;
+      width: 26px;
+      left: 4px;
+      bottom: 4px;
+      background-color: white;
+      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      border-radius: 50%;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    
+    input:checked + .toggle-slider {
+      background: var(--gradient-primary);
+      box-shadow: 0 0 10px rgba(124, 58, 237, 0.5);
+    }
+    
+    input:checked + .toggle-slider:before {
+      transform: translateX(26px);
+    }
+    
+    .toggle-switch:hover .toggle-slider {
+      box-shadow: 0 0 8px rgba(124, 58, 237, 0.3);
+    }
+    
+    .warning-box {
+      background: #fff3cd;
+      border: 2px solid #ffc107;
+      border-radius: var(--radius-md);
+      padding: 16px;
+      margin-top: 12px;
+      color: #856404;
+    }
+    
+    .warning-box strong {
+      display: block;
+      margin-bottom: 8px;
+    }
+    
+    .privacy-text {
+      background: var(--color-bg);
+      padding: 16px;
+      border-radius: var(--radius-md);
+      border-left: 4px solid var(--color-primary);
+      font-size: 0.95rem;
+      line-height: 1.6;
+      margin-top: 12px;
+    }
+    
+    .save-section {
+      position: sticky;
+      bottom: 0;
+      background: var(--color-surface);
+      padding: 20px;
+      border-top: 2px solid var(--color-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 -4px 8px rgba(0,0,0,0.1);
+      animation: slideInUp 0.6s ease-out 0.7s both;
+      backdrop-filter: blur(10px);
+    }
+    
+    .save-status {
+      font-size: 0.9rem;
+      color: var(--color-success);
+    }
+  </style>
+</head>
+<body>
+  <div class="settings-container">
+    <header class="header">
+      <h1>⚙️ Settings</h1>
+      <p class="subtitle">Configure DeskEye to your preferences</p>
+    </header>
+
+    <!-- Detection Pipeline -->
+    <div class="settings-section">
+      <h2>Detection Pipeline</h2>
+      
+      <div class="setting-item">
+        <label class="setting-label" for="pipeline-select">Pipeline Type</label>
+        <p class="setting-description">
+          Choose between lightweight feature-based detection (recommended) or heavier TFJS model-based detection.
+        </p>
+        <div class="setting-control">
+          <select id="pipeline-select">
+            <option value="feature">Feature-based (Fast, Recommended)</option>
+            <option value="tfjs">TensorFlow.js (Slower, More Accurate)</option>
+          </select>
+        </div>
+      </div>
+      
+      <div class="setting-item">
+        <label class="setting-label" for="framerate-input">Frame Rate</label>
+        <p class="setting-description">
+          Number of frames processed per second. Lower values reduce CPU usage.
+        </p>
+        <div class="setting-control">
+          <input type="range" id="framerate-input" min="6" max="15" step="1" value="10">
+          <span class="range-value" id="framerate-value">10 FPS</span>
+        </div>
+      </div>
+      
+      <div class="setting-item">
+        <label class="setting-label" for="window-size-input">Analysis Window</label>
+        <p class="setting-description">
+          Time window (in seconds) for aggregating eye metrics.
+        </p>
+        <div class="setting-control">
+          <input type="number" id="window-size-input" min="5" max="30" value="15">
+          <span>seconds</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Thresholds -->
+    <div class="settings-section">
+      <h2>Detection Thresholds</h2>
+      
+      <div class="setting-item">
+        <label class="setting-label" for="threshold-ok-input">OK Threshold</label>
+        <p class="setting-description">
+          Strain probability below this value is considered healthy (green status).
+        </p>
+        <div class="setting-control">
+          <input type="range" id="threshold-ok-input" min="0.2" max="0.6" step="0.05" value="0.4">
+          <span class="range-value" id="threshold-ok-value">0.40</span>
+        </div>
+      </div>
+      
+      <div class="setting-item">
+        <label class="setting-label" for="threshold-caution-input">Caution Threshold</label>
+        <p class="setting-description">
+          Strain probability above this value triggers break recommendations (red status).
+        </p>
+        <div class="setting-control">
+          <input type="range" id="threshold-caution-input" min="0.5" max="0.9" step="0.05" value="0.7">
+          <span class="range-value" id="threshold-caution-value">0.70</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Privacy & Data -->
+    <div class="settings-section">
+      <h2>Privacy & Data</h2>
+      
+      <div class="setting-item">
+        <label class="setting-label">Save Raw Images</label>
+        <p class="setting-description">
+          Enable to save raw webcam frames for debugging. Disabled by default for privacy.
+        </p>
+        <div class="setting-control">
+          <label class="toggle-switch">
+            <input type="checkbox" id="save-raw-images">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="warning-box" id="raw-images-warning" style="display: none;">
+          <strong>⚠️ Privacy Warning</strong>
+          Enabling this will save raw webcam images to your local storage. These images will contain your face and surroundings. Only enable for debugging purposes.
+        </div>
+      </div>
+      
+      <div class="setting-item">
+        <label class="setting-label">Privacy Notice</label>
+        <div class="privacy-text">
+          <strong>🔒 Your Privacy is Protected</strong>
+          <p>
+            DeskEye processes all video locally on your device. No raw video or images are uploaded to any server. 
+            Only aggregated metrics (blink rate, strain scores) are stored locally in a database on your computer.
+          </p>
+          <p style="margin-top: 12px;">
+            <strong>For Minors:</strong> Parental/guardian consent required for minors. This app accesses your webcam 
+            to analyze eye features (blink rate and eye openness) for the purpose of detecting eye strain. 
+            No raw video is stored or uploaded by default. If you are under 18, you must have a parent or guardian 
+            review and sign the consent form before testing.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Audio & Notifications -->
+    <div class="settings-section">
+      <h2>Audio & Notifications</h2>
+      
+      <div class="setting-item">
+        <label class="setting-label" for="volume-input">Alert Volume</label>
+        <p class="setting-description">
+          Volume level for break reminder sounds.
+        </p>
+        <div class="setting-control">
+          <input type="range" id="volume-input" min="0" max="1" step="0.1" value="0.7">
+          <span class="range-value" id="volume-value">70%</span>
+        </div>
+      </div>
+      
+      <div class="setting-item">
+        <label class="setting-label">Mute Audio Alerts</label>
+        <p class="setting-description">
+          Disable all audio alerts (visual notifications only).
+        </p>
+        <div class="setting-control">
+          <label class="toggle-switch">
+            <input type="checkbox" id="mute-audio">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+      
+      <div class="setting-item">
+        <label class="setting-label">Do Not Disturb</label>
+        <p class="setting-description">
+          Pause all break notifications and alerts.
+        </p>
+        <div class="setting-control">
+          <label class="toggle-switch">
+            <input type="checkbox" id="do-not-disturb">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Accessibility -->
+    <div class="settings-section">
+      <h2>Accessibility</h2>
+      
+      <div class="setting-item">
+        <label class="setting-label">Large Fonts</label>
+        <p class="setting-description">
+          Increase font sizes throughout the application.
+        </p>
+        <div class="setting-control">
+          <label class="toggle-switch">
+            <input type="checkbox" id="large-fonts">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+      
+      <div class="setting-item">
+        <label class="setting-label">High Contrast</label>
+        <p class="setting-description">
+          Enable high contrast mode for better visibility.
+        </p>
+        <div class="setting-control">
+          <label class="toggle-switch">
+            <input type="checkbox" id="high-contrast">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- System -->
+    <div class="settings-section">
+      <h2>System</h2>
+      
+      <div class="setting-item">
+        <label class="setting-label">Auto-start on Login</label>
+        <p class="setting-description">
+          Automatically start DeskEye when you log in to your computer.
+        </p>
+        <div class="setting-control">
+          <label class="toggle-switch">
+            <input type="checkbox" id="auto-start">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Save Section -->
+    <div class="save-section">
+      <span class="save-status" id="save-status"></span>
+      <div>
+        <button id="reset-btn" class="btn btn-outline">Reset to Defaults</button>
+        <button id="save-btn" class="btn btn-primary">Save Settings</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="settings.js"></script>
+</body>
+</html>

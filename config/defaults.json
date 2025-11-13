@@ -1,0 +1,24 @@
+{
+  "pipeline": "feature",
+  "framerate": 10,
+  "windowSize": 15,
+  "thresholds": {
+    "ok": 0.4,
+    "caution": 0.7
+  },
+  "saveRawImages": false,
+  "soundVolume": 0.7,
+  "autoStartLogin": false,
+  "doNotDisturb": false,
+  "accessibility": {
+    "largeFonts": false,
+    "highContrast": false,
+    "muteAudio": false
+  },
+  "advanced": {
+    "earThreshold": 0.21,
+    "blinkDurationThreshold": 300,
+    "minDetectionConfidence": 0.5,
+    "minTrackingConfidence": 0.5
+  }
+}

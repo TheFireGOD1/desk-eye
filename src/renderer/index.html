@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:;">
+  <title>DeskEye - Eye Strain Monitor</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <h1>👁️ DeskEye</h1>
+      <p class="subtitle">Your Personal Eye Strain Monitor</p>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Camera Preview Section -->
+      <section class="preview-section">
+        <div class="preview-container">
+          <video id="webcam" autoplay playsinline></video>
+          <canvas id="overlay-canvas"></canvas>
+          <div id="camera-status" class="camera-status">
+            <span class="status-dot"></span>
+            <span class="status-text">Camera Inactive</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Status Indicator -->
+      <section class="status-section">
+        <div id="status-indicator" class="status-indicator status-idle">
+          <div class="status-circle">
+            <span class="status-emoji">😊</span>
+          </div>
+          <h2 id="status-text">Ready to Monitor</h2>
+          <p id="status-message">Click Start to begin monitoring your eye health</p>
+        </div>
+      </section>
+
+      <!-- Live Metrics -->
+      <section class="metrics-section">
+        <h3>Live Metrics</h3>
+        <div class="metrics-grid">
+          <div class="metric-card">
+            <div class="metric-icon">👁️</div>
+            <div class="metric-value" id="blink-rate">--</div>
+            <div class="metric-label">Blinks/min</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-icon">⏱️</div>
+            <div class="metric-value" id="last-break">--</div>
+            <div class="metric-label">Last Break</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-icon">💚</div>
+            <div class="metric-value" id="health-score">100</div>
+            <div class="metric-label">Health Score</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-icon">📊</div>
+            <div class="metric-value" id="strain-level">Low</div>
+            <div class="metric-label">Strain Level</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Controls -->
+      <section class="controls-section">
+        <button id="start-btn" class="btn btn-primary btn-large">
+          <span class="btn-icon">▶️</span>
+          Start Monitoring
+        </button>
+        <button id="stop-btn" class="btn btn-secondary btn-large" style="display: none;">
+          <span class="btn-icon">⏸️</span>
+          Stop Monitoring
+        </button>
+        <button id="break-btn" class="btn btn-accent" disabled>
+          <span class="btn-icon">☕</span>
+          Take 20s Break
+        </button>
+      </section>
+
+      <!-- Quick Actions -->
+      <section class="actions-section">
+        <button id="dashboard-btn" class="btn btn-outline">
+          <span class="btn-icon">📈</span>
+          View Dashboard
+        </button>
+        <button id="settings-btn" class="btn btn-outline">
+          <span class="btn-icon">⚙️</span>
+          Settings
+        </button>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <p class="privacy-notice">
+        🔒 Privacy-first: All processing happens locally. No data is uploaded.
+      </p>
+    </footer>
+  </div>
+
+  <!-- Break Modal -->
+  <div id="break-modal" class="modal">
+    <div class="modal-content break-modal-content">
+      <h2>Time for a Break! 👀</h2>
+      <p>Look away from your screen and relax your eyes</p>
+      <div class="countdown-circle">
+        <svg class="countdown-svg" viewBox="0 0 100 100">
+          <defs>
+            <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" style="stop-color:#7C3AED;stop-opacity:1" />
+              <stop offset="100%" style="stop-color:#3B82F6;stop-opacity:1" />
+            </linearGradient>
+          </defs>
+          <circle class="countdown-bg" cx="50" cy="50" r="45"></circle>
+          <circle id="countdown-progress" class="countdown-progress" cx="50" cy="50" r="45"></circle>
+        </svg>
+        <div class="countdown-text">
+          <span id="countdown-number">20</span>
+          <span class="countdown-label">seconds</span>
+        </div>
+      </div>
+      <button id="skip-break-btn" class="btn btn-text">Skip Break</button>
+    </div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>
