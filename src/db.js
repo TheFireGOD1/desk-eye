@@ -1,44 +1,49 @@
 /**
  * Database module for DeskEye
- * Stores aggregated eye health metrics locally using SQLite
+ * Stores aggregated eye health metrics locally using JSON files
  * Privacy-first: No raw images or video data stored by default
  */
 
-const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
 const { app } = require('electron');
 
-let db = null;
+let dbPath = null;
+let metricsFile = null;
+let sessionsFile = null;
 
 /**
- * Initialize database connection and create tables
+ * Initialize database (JSON file storage)
  */
 function initialize() {
   try {
     // Get user data path
     const userDataPath = app.getPath('userData');
-    const dbPath = path.join(userDataPath, 'deskeye.db');
+    dbPath = path.join(userDataPath, 'deskeye_data');
     
     console.log('Database path:', dbPath);
     
     // Ensure directory exists
-    if (!fs.existsSync(userDataPath)) {
-      fs.mkdirSync(userDataPath, { recursive: true });
+    if (!fs.existsSync(dbPath)) {
+      fs.mkdirSync(dbPath, { recursive: true });
     }
     
-    // Open database
-    db = new Database(dbPath);
+    // Set file paths
+    metricsFile = path.join(dbPath, 'metrics.json');
+    sessionsFile = path.join(dbPath, 'sessions.json');
     
-    // Enable WAL mode for better concurrency
-    db.pragma('journal_mode = WAL');
+    // Initialize files if they don't exist
+    if (!fs.existsSync(metricsFile)) {
+      fs.writeFileSync(metricsFile, JSON.stringify([], null, 2));
+    }
     
-    // Create tables
-    createTables();
+    if (!fs.existsSync(sessionsFile)) {
+      fs.writeFileSync(sessionsFile, JSON.stringify([], null, 2));
+    }
     
     console.log('Database initialized successfully');
     
-    return db;
+    return true;
   } catch (error) {
     console.error('Database initialization error:', error);
     throw error;
@@ -46,50 +51,53 @@ function initialize() {
 }
 
 /**
- * Create database tables
+ * Read metrics from file
  */
-function createTables() {
-  // Metrics table - stores aggregated eye health metrics
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS metrics (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      timestamp INTEGER NOT NULL,
-      blink_rate REAL NOT NULL,
-      avg_ear REAL NOT NULL,
-      strain_score REAL NOT NULL,
-      break_taken INTEGER DEFAULT 0,
-      created_at INTEGER DEFAULT (strftime('%s', 'now') * 1000)
-    )
-  `);
-  
-  // Create index on timestamp for faster queries
-  db.exec(`
-    CREATE INDEX IF NOT EXISTS idx_metrics_timestamp 
-    ON metrics(timestamp)
-  `);
-  
-  // Settings table (optional, as we use electron-store)
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS settings (
-      key TEXT PRIMARY KEY,
-      value TEXT NOT NULL,
-      updated_at INTEGER DEFAULT (strftime('%s', 'now') * 1000)
-    )
-  `);
-  
-  // Session table - track monitoring sessions
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS sessions (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      start_time INTEGER NOT NULL,
-      end_time INTEGER,
-      duration INTEGER,
-      total_blinks INTEGER DEFAULT 0,
-      breaks_taken INTEGER DEFAULT 0,
-      avg_strain_score REAL,
-      created_at INTEGER DEFAULT (strftime('%s', 'now') * 1000)
-    )
-  `);
+function readMetrics() {
+  try {
+    const data = fs.readFileSync(metricsFile, 'utf8');
+    return JSON.parse(data);
+  } catch (error) {
+    console.error('Error reading metrics:', error);
+    return [];
+  }
+}
+
+/**
+ * Write metrics to file
+ */
+function writeMetrics(metrics) {
+  try {
+    fs.writeFileSync(metricsFile, JSON.stringify(metrics, null, 2));
+  } catch (error) {
+    console.error('Error writing metrics:', error);
+    throw error;
+  }
+}
+
+/**
+ * Read sessions from file
+ */
+function readSessions() {
+  try {
+    const data = fs.readFileSync(sessionsFile, 'utf8');
+    return JSON.parse(data);
+  } catch (error) {
+    console.error('Error reading sessions:', error);
+    return [];
+  }
+}
+
+/**
+ * Write sessions to file
+ */
+function writeSessions(sessions) {
+  try {
+    fs.writeFileSync(sessionsFile, JSON.stringify(sessions, null, 2));
+  } catch (error) {
+    console.error('Error writing sessions:', error);
+    throw error;
+  }
 }
 
 /**
@@ -97,20 +105,22 @@ function createTables() {
  */
 function saveMetric(metric) {
   try {
-    const stmt = db.prepare(`
-      INSERT INTO metrics (timestamp, blink_rate, avg_ear, strain_score, break_taken)
-      VALUES (?, ?, ?, ?, ?)
-    `);
+    const metrics = readMetrics();
     
-    const result = stmt.run(
-      metric.timestamp || Date.now(),
-      metric.blinkRate || 0,
-      metric.avgEAR || 0,
-      metric.strainScore || 0,
-      metric.breakTaken ? 1 : 0
-    );
+    const newMetric = {
+      id: metrics.length > 0 ? Math.max(...metrics.map(m => m.id || 0)) + 1 : 1,
+      timestamp: metric.timestamp || Date.now(),
+      blinkRate: metric.blinkRate || 0,
+      avgEAR: metric.avgEAR || 0,
+      strainScore: metric.strainScore || 0,
+      breakTaken: metric.breakTaken || false,
+      createdAt: Date.now()
+    };
     
-    return result.lastInsertRowid;
+    metrics.push(newMetric);
+    writeMetrics(metrics);
+    
+    return newMetric.id;
   } catch (error) {
     console.error('Error saving metric:', error);
     throw error;
@@ -122,23 +132,14 @@ function saveMetric(metric) {
  */
 function getMetrics(startDate, endDate, limit = 1000) {
   try {
-    const stmt = db.prepare(`
-      SELECT 
-        id,
-        timestamp,
-        blink_rate as blinkRate,
-        avg_ear as avgEAR,
-        strain_score as strainScore,
-        break_taken as breakTaken,
-        created_at as createdAt
-      FROM metrics
-      WHERE timestamp >= ? AND timestamp <= ?
-      ORDER BY timestamp DESC
-      LIMIT ?
-    `);
+    const metrics = readMetrics();
     
-    const metrics = stmt.all(startDate, endDate, limit);
-    return metrics;
+    const filtered = metrics
+      .filter(m => m.timestamp >= startDate && m.timestamp <= endDate)
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .slice(0, limit);
+    
+    return filtered;
   } catch (error) {
     console.error('Error fetching metrics:', error);
     throw error;
@@ -150,20 +151,31 @@ function getMetrics(startDate, endDate, limit = 1000) {
  */
 function getStatistics(startDate, endDate) {
   try {
-    const stmt = db.prepare(`
-      SELECT 
-        COUNT(*) as totalRecords,
-        AVG(blink_rate) as avgBlinkRate,
-        AVG(avg_ear) as avgEAR,
-        AVG(strain_score) as avgStrainScore,
-        SUM(break_taken) as totalBreaks,
-        MIN(timestamp) as firstRecord,
-        MAX(timestamp) as lastRecord
-      FROM metrics
-      WHERE timestamp >= ? AND timestamp <= ?
-    `);
+    const metrics = readMetrics();
+    const filtered = metrics.filter(m => m.timestamp >= startDate && m.timestamp <= endDate);
     
-    const stats = stmt.get(startDate, endDate);
+    if (filtered.length === 0) {
+      return {
+        totalRecords: 0,
+        avgBlinkRate: 0,
+        avgEAR: 0,
+        avgStrainScore: 0,
+        totalBreaks: 0,
+        firstRecord: null,
+        lastRecord: null
+      };
+    }
+    
+    const stats = {
+      totalRecords: filtered.length,
+      avgBlinkRate: filtered.reduce((sum, m) => sum + m.blinkRate, 0) / filtered.length,
+      avgEAR: filtered.reduce((sum, m) => sum + m.avgEAR, 0) / filtered.length,
+      avgStrainScore: filtered.reduce((sum, m) => sum + m.strainScore, 0) / filtered.length,
+      totalBreaks: filtered.filter(m => m.breakTaken).length,
+      firstRecord: Math.min(...filtered.map(m => m.timestamp)),
+      lastRecord: Math.max(...filtered.map(m => m.timestamp))
+    };
+    
     return stats;
   } catch (error) {
     console.error('Error fetching statistics:', error);
@@ -178,15 +190,14 @@ function deleteOldMetrics(daysToKeep = 90) {
   try {
     const cutoffDate = Date.now() - (daysToKeep * 24 * 60 * 60 * 1000);
     
-    const stmt = db.prepare(`
-      DELETE FROM metrics
-      WHERE timestamp < ?
-    `);
+    const metrics = readMetrics();
+    const filtered = metrics.filter(m => m.timestamp >= cutoffDate);
+    const deletedCount = metrics.length - filtered.length;
     
-    const result = stmt.run(cutoffDate);
-    console.log(`Deleted ${result.changes} old metric records`);
+    writeMetrics(filtered);
+    console.log(`Deleted ${deletedCount} old metric records`);
     
-    return result.changes;
+    return deletedCount;
   } catch (error) {
     console.error('Error deleting old metrics:', error);
     throw error;
@@ -252,13 +263,23 @@ async function exportToCSV(startDate, endDate) {
  */
 function startSession() {
   try {
-    const stmt = db.prepare(`
-      INSERT INTO sessions (start_time)
-      VALUES (?)
-    `);
+    const sessions = readSessions();
     
-    const result = stmt.run(Date.now());
-    return result.lastInsertRowid;
+    const newSession = {
+      id: sessions.length > 0 ? Math.max(...sessions.map(s => s.id || 0)) + 1 : 1,
+      startTime: Date.now(),
+      endTime: null,
+      duration: null,
+      totalBlinks: 0,
+      breaksTaken: 0,
+      avgStrainScore: 0,
+      createdAt: Date.now()
+    };
+    
+    sessions.push(newSession);
+    writeSessions(sessions);
+    
+    return newSession.id;
   } catch (error) {
     console.error('Error starting session:', error);
     throw error;
@@ -270,47 +291,31 @@ function startSession() {
  */
 function endSession(sessionId) {
   try {
-    const endTime = Date.now();
-    
-    // Get session start time
-    const session = db.prepare('SELECT start_time FROM sessions WHERE id = ?').get(sessionId);
+    const sessions = readSessions();
+    const session = sessions.find(s => s.id === sessionId);
     
     if (!session) {
       throw new Error('Session not found');
     }
     
-    const duration = endTime - session.start_time;
+    const endTime = Date.now();
+    const duration = endTime - session.startTime;
     
     // Calculate session statistics
-    const stats = db.prepare(`
-      SELECT 
-        COUNT(*) as totalBlinks,
-        SUM(break_taken) as breaksTaken,
-        AVG(strain_score) as avgStrainScore
-      FROM metrics
-      WHERE timestamp >= ? AND timestamp <= ?
-    `).get(session.start_time, endTime);
-    
-    // Update session
-    const stmt = db.prepare(`
-      UPDATE sessions
-      SET 
-        end_time = ?,
-        duration = ?,
-        total_blinks = ?,
-        breaks_taken = ?,
-        avg_strain_score = ?
-      WHERE id = ?
-    `);
-    
-    stmt.run(
-      endTime,
-      duration,
-      stats.totalBlinks || 0,
-      stats.breaksTaken || 0,
-      stats.avgStrainScore || 0,
-      sessionId
+    const metrics = readMetrics();
+    const sessionMetrics = metrics.filter(
+      m => m.timestamp >= session.startTime && m.timestamp <= endTime
     );
+    
+    session.endTime = endTime;
+    session.duration = duration;
+    session.totalBlinks = sessionMetrics.length;
+    session.breaksTaken = sessionMetrics.filter(m => m.breakTaken).length;
+    session.avgStrainScore = sessionMetrics.length > 0
+      ? sessionMetrics.reduce((sum, m) => sum + m.strainScore, 0) / sessionMetrics.length
+      : 0;
+    
+    writeSessions(sessions);
     
     return sessionId;
   } catch (error) {
@@ -324,22 +329,12 @@ function endSession(sessionId) {
  */
 function getSessions(limit = 10) {
   try {
-    const stmt = db.prepare(`
-      SELECT 
-        id,
-        start_time as startTime,
-        end_time as endTime,
-        duration,
-        total_blinks as totalBlinks,
-        breaks_taken as breaksTaken,
-        avg_strain_score as avgStrainScore
-      FROM sessions
-      WHERE end_time IS NOT NULL
-      ORDER BY start_time DESC
-      LIMIT ?
-    `);
+    const sessions = readSessions();
     
-    return stmt.all(limit);
+    return sessions
+      .filter(s => s.endTime !== null)
+      .sort((a, b) => b.startTime - a.startTime)
+      .slice(0, limit);
   } catch (error) {
     console.error('Error fetching sessions:', error);
     throw error;
@@ -347,33 +342,35 @@ function getSessions(limit = 10) {
 }
 
 /**
- * Vacuum database to reclaim space
+ * Vacuum database to reclaim space (compact JSON files)
  */
 function vacuum() {
   try {
-    db.exec('VACUUM');
-    console.log('Database vacuumed successfully');
+    // Re-write files to compact them
+    const metrics = readMetrics();
+    writeMetrics(metrics);
+    
+    const sessions = readSessions();
+    writeSessions(sessions);
+    
+    console.log('Database compacted successfully');
   } catch (error) {
-    console.error('Error vacuuming database:', error);
+    console.error('Error compacting database:', error);
   }
 }
 
 /**
- * Close database connection
+ * Close database connection (no-op for JSON storage)
  */
 function close() {
-  if (db) {
-    db.close();
-    db = null;
-    console.log('Database connection closed');
-  }
+  console.log('Database closed');
 }
 
 /**
- * Get database instance (for advanced queries)
+ * Get database path
  */
 function getDatabase() {
-  return db;
+  return dbPath;
 }
 
 // Export functions
