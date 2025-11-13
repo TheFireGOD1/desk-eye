@@ -1,13 +1,16 @@
-// DeskEye Main Renderer Process
-// Note: We can't use require() in renderer with contextIsolation
-// So we'll implement the detection logic directly here
+// DeskEye Main Renderer Process with Real Blink Detection
+
+// Eye landmark indices for MediaPipe Face Mesh
+const LEFT_EYE = [33, 160, 158, 133, 153, 144];
+const RIGHT_EYE = [362, 385, 387, 263, 373, 380];
 
 // State management
 let state = {
   isMonitoring: false,
   settings: null,
-  webcamStream: null,
-  animationFrameId: null,
+  faceMesh: null,
+  camera: null,
+  canvasCtx: null,
   metrics: {
     blinkRate: 0,
     lastBreakTime: null,
@@ -19,7 +22,10 @@ let state = {
   lastBreakTimestamp: Date.now(),
   lastBlinkTime: Date.now(),
   blinkCount: 0,
-  startTime: null
+  startTime: null,
+  isBlinking: false,
+  earHistory: [],
+  EAR_THRESHOLD: 0.21
 };
 
 // DOM Elements
@@ -99,21 +105,6 @@ function setupEventListeners() {
   elements.settingsBtn.addEventListener('click', openSettings);
   elements.skipBreakBtn.addEventListener('click', skipBreak);
   
-  // Simulate blink detection with spacebar or click
-  document.addEventListener('keydown', (e) => {
-    if (e.code === 'Space' && state.isMonitoring) {
-      e.preventDefault();
-      simulateBlink();
-    }
-  });
-  
-  // Also detect blinks on video click
-  elements.webcam.addEventListener('click', () => {
-    if (state.isMonitoring) {
-      simulateBlink();
-    }
-  });
-  
   // Listen for monitoring state changes from main process
   window.electronAPI.onMonitoringStateChanged((isMonitoring) => {
     if (isMonitoring && !state.isMonitoring) {
@@ -124,64 +115,66 @@ function setupEventListeners() {
   });
 }
 
-function simulateBlink() {
-  state.lastBlinkTime = Date.now();
-  state.blinkCount++;
-  console.log('Blink detected! Total:', state.blinkCount);
-  
-  // Visual feedback
-  elements.overlayCanvas.style.opacity = '0.5';
-  setTimeout(() => {
-    elements.overlayCanvas.style.opacity = '1';
-  }, 100);
-}
-
 async function startMonitoring() {
   if (state.isMonitoring) return;
   
   try {
-    console.log('Starting monitoring...');
+    console.log('Starting monitoring with real blink detection...');
     
-    // Request camera access
-    state.webcamStream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        width: { ideal: 640 },
-        height: { ideal: 480 },
-        facingMode: 'user'
+    // Setup canvas
+    state.canvasCtx = elements.overlayCanvas.getContext('2d');
+    
+    // Initialize MediaPipe Face Mesh
+    state.faceMesh = new FaceMesh({
+      locateFile: (file) => {
+        return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
       }
     });
     
-    elements.webcam.srcObject = state.webcamStream;
-    
-    // Wait for video to be ready
-    await new Promise((resolve) => {
-      elements.webcam.onloadedmetadata = resolve;
+    state.faceMesh.setOptions({
+      maxNumFaces: 1,
+      refineLandmarks: true,
+      minDetectionConfidence: 0.5,
+      minTrackingConfidence: 0.5
     });
+    
+    state.faceMesh.onResults(onFaceMeshResults);
+    
+    // Initialize camera
+    state.camera = new Camera(elements.webcam, {
+      onFrame: async () => {
+        if (state.faceMesh && state.isMonitoring) {
+          await state.faceMesh.send({ image: elements.webcam });
+        }
+      },
+      width: 640,
+      height: 480
+    });
+    
+    await state.camera.start();
     
     state.isMonitoring = true;
     state.startTime = Date.now();
     state.lastBlinkTime = Date.now();
     state.blinkCount = 0;
+    state.earHistory = [];
     
     await window.electronAPI.startMonitoring();
-    
-    // Start processing loop
-    processFrame();
     
     updateUI();
     updateCameraStatus(true);
     
-    // Show instruction overlay
+    // Update instruction text
     const instruction = document.getElementById('blink-instruction');
     if (instruction) {
+      instruction.innerHTML = '<p>👁️ <strong>Real blink detection active!</strong></p><p style="font-size: 0.85em; margin-top: 4px;">Don\'t blink for 5+ seconds to trigger strain warning!</p>';
       instruction.style.display = 'block';
-      // Hide after 10 seconds
       setTimeout(() => {
         instruction.style.display = 'none';
       }, 10000);
     }
     
-    console.log('Monitoring started successfully');
+    console.log('Monitoring started successfully with MediaPipe Face Mesh');
   } catch (error) {
     console.error('Failed to start monitoring:', error);
     
@@ -193,6 +186,166 @@ async function startMonitoring() {
   }
 }
 
+// Calculate Eye Aspect Ratio (EAR)
+function calculateEAR(landmarks, eyeIndices) {
+  const points = eyeIndices.map(idx => landmarks[idx]);
+  
+  // Vertical distances
+  const v1 = euclideanDistance(points[1], points[5]);
+  const v2 = euclideanDistance(points[2], points[4]);
+  
+  // Horizontal distance
+  const h = euclideanDistance(points[0], points[3]);
+  
+  // EAR formula
+  return (v1 + v2) / (2.0 * h);
+}
+
+function euclideanDistance(p1, p2) {
+  const dx = p1.x - p2.x;
+  const dy = p1.y - p2.y;
+  const dz = (p1.z || 0) - (p2.z || 0);
+  return Math.sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+// Handle Face Mesh results
+function onFaceMeshResults(results) {
+  if (!state.canvasCtx || !state.isMonitoring) return;
+  
+  // Set canvas size to match video
+  elements.overlayCanvas.width = elements.webcam.videoWidth;
+  elements.overlayCanvas.height = elements.webcam.videoHeight;
+  
+  // Clear canvas
+  state.canvasCtx.save();
+  state.canvasCtx.clearRect(0, 0, elements.overlayCanvas.width, elements.overlayCanvas.height);
+  
+  if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+    const landmarks = results.multiFaceLandmarks[0];
+    
+    // Draw eye landmarks
+    drawEyeLandmarks(landmarks, LEFT_EYE, '#7C3AED');
+    drawEyeLandmarks(landmarks, RIGHT_EYE, '#3B82F6');
+    
+    // Calculate EAR for both eyes
+    const leftEAR = calculateEAR(landmarks, LEFT_EYE);
+    const rightEAR = calculateEAR(landmarks, RIGHT_EYE);
+    const avgEAR = (leftEAR + rightEAR) / 2;
+    
+    // Detect blink
+    detectBlink(avgEAR);
+    
+    // Update metrics
+    updateMetricsFromDetection();
+  }
+  
+  state.canvasCtx.restore();
+}
+
+function drawEyeLandmarks(landmarks, eyeIndices, color) {
+  state.canvasCtx.strokeStyle = color;
+  state.canvasCtx.lineWidth = 2;
+  state.canvasCtx.beginPath();
+  
+  eyeIndices.forEach((idx, i) => {
+    const point = landmarks[idx];
+    const x = point.x * elements.overlayCanvas.width;
+    const y = point.y * elements.overlayCanvas.height;
+    
+    if (i === 0) {
+      state.canvasCtx.moveTo(x, y);
+    } else {
+      state.canvasCtx.lineTo(x, y);
+    }
+  });
+  
+  state.canvasCtx.closePath();
+  state.canvasCtx.stroke();
+}
+
+function detectBlink(ear) {
+  const now = Date.now();
+  
+  if (ear < state.EAR_THRESHOLD) {
+    if (!state.isBlinking) {
+      state.isBlinking = true;
+      state.blinkStartTime = now;
+    }
+  } else {
+    if (state.isBlinking) {
+      const blinkDuration = now - state.blinkStartTime;
+      
+      // Valid blink (not too long)
+      if (blinkDuration < 300) {
+        state.blinkCount++;
+        state.lastBlinkTime = now;
+        console.log('Blink detected! Total:', state.blinkCount);
+      }
+      
+      state.isBlinking = false;
+    }
+  }
+}
+
+function updateMetricsFromDetection() {
+  const now = Date.now();
+  const timeSinceLastBlink = now - state.lastBlinkTime;
+  const elapsedMinutes = (now - state.startTime) / 60000;
+  
+  // Calculate blink rate
+  const blinkRate = elapsedMinutes > 0 ? state.blinkCount / elapsedMinutes : 0;
+  
+  // Calculate strain based on time since last blink
+  let strainProb = 0;
+  
+  if (timeSinceLastBlink > 5000) {
+    strainProb = 0.8; // High strain
+  } else if (timeSinceLastBlink > 3000) {
+    strainProb = 0.5; // Moderate strain
+  } else if (blinkRate < 10) {
+    strainProb = 0.4; // Mild strain
+  } else {
+    strainProb = 0.2; // Normal
+  }
+  
+  // Update state
+  state.metrics.blinkRate = blinkRate;
+  state.metrics.currentStrainProb = strainProb;
+  state.metrics.healthScore = Math.round((1 - strainProb) * 100);
+  
+  // Update UI based on strain level
+  if (strainProb < 0.4) {
+    state.metrics.strainLevel = 'Low';
+    updateStatusIndicator('ok', 'Eyes Looking Good! 😊', 'Keep up the healthy habits');
+  } else if (strainProb < 0.7) {
+    state.metrics.strainLevel = 'Moderate';
+    updateStatusIndicator('caution', 'Take Care! 😐', 'Consider taking a break soon');
+  } else {
+    state.metrics.strainLevel = 'High';
+    updateStatusIndicator('break', 'Break Time! 😫', 'Your eyes need rest now');
+    
+    // Trigger break
+    if (!state.breakInProgress && !state.settings?.doNotDisturb) {
+      const timeSinceLastBreak = Date.now() - state.lastBreakTimestamp;
+      if (timeSinceLastBreak > 2 * 60 * 1000) {
+        triggerBreakNotification();
+      }
+    }
+  }
+  
+  updateMetricsDisplay();
+  
+  // Save metrics periodically (every 15 seconds)
+  if (!state.lastSaveTime || now - state.lastSaveTime > 15000) {
+    saveMetric({
+      blinkRate,
+      avgEAR: 0.25,
+      strainProb
+    });
+    state.lastSaveTime = now;
+  }
+}
+
 async function stopMonitoring() {
   if (!state.isMonitoring) return;
   
@@ -201,17 +354,21 @@ async function stopMonitoring() {
   state.isMonitoring = false;
   await window.electronAPI.stopMonitoring();
   
-  // Stop animation loop
-  if (state.animationFrameId) {
-    cancelAnimationFrame(state.animationFrameId);
-    state.animationFrameId = null;
+  // Stop camera
+  if (state.camera) {
+    state.camera.stop();
+    state.camera = null;
   }
   
-  // Stop webcam
-  if (state.webcamStream) {
-    state.webcamStream.getTracks().forEach(track => track.stop());
-    state.webcamStream = null;
-    elements.webcam.srcObject = null;
+  // Close face mesh
+  if (state.faceMesh) {
+    state.faceMesh.close();
+    state.faceMesh = null;
+  }
+  
+  // Clear canvas
+  if (state.canvasCtx) {
+    state.canvasCtx.clearRect(0, 0, elements.overlayCanvas.width, elements.overlayCanvas.height);
   }
   
   updateUI();
@@ -220,85 +377,7 @@ async function stopMonitoring() {
   console.log('Monitoring stopped');
 }
 
-async function processFrame() {
-  if (!state.isMonitoring) return;
-  
-  try {
-    const now = Date.now();
-    const timeSinceLastBlink = now - state.lastBlinkTime;
-    const elapsedMinutes = (now - state.startTime) / 60000;
-    
-    // Calculate blink rate (blinks per minute)
-    const blinkRate = elapsedMinutes > 0 ? state.blinkCount / elapsedMinutes : 0;
-    
-    // Detect strain based on time since last blink
-    // If no blink for 5+ seconds, trigger strain warning
-    let strainProb = 0;
-    
-    if (timeSinceLastBlink > 5000) {
-      // No blink for 5+ seconds = HIGH STRAIN
-      strainProb = 0.8;
-    } else if (timeSinceLastBlink > 3000) {
-      // No blink for 3-5 seconds = MODERATE STRAIN
-      strainProb = 0.5;
-    } else if (blinkRate < 10) {
-      // Low blink rate = MILD STRAIN
-      strainProb = 0.4;
-    } else {
-      // Normal
-      strainProb = 0.2;
-    }
-    
-    // Update metrics
-    state.metrics.blinkRate = blinkRate;
-    state.metrics.currentStrainProb = strainProb;
-    state.metrics.healthScore = Math.round((1 - strainProb) * 100);
-    
-    // Determine strain level and update UI
-    if (strainProb < 0.4) {
-      state.metrics.strainLevel = 'Low';
-      updateStatusIndicator('ok', 'Eyes Looking Good! 😊', 'Keep up the healthy habits');
-    } else if (strainProb < 0.7) {
-      state.metrics.strainLevel = 'Moderate';
-      updateStatusIndicator('caution', 'Take Care! 😐', 'Consider taking a break soon');
-    } else {
-      state.metrics.strainLevel = 'High';
-      updateStatusIndicator('break', 'Break Time! 😫', 'Your eyes need rest now');
-      
-      // Trigger break if not already in progress
-      if (!state.breakInProgress && !state.settings?.doNotDisturb) {
-        const timeSinceLastBreak = Date.now() - state.lastBreakTimestamp;
-        // Only trigger if at least 2 minutes since last break
-        if (timeSinceLastBreak > 2 * 60 * 1000) {
-          triggerBreakNotification();
-        }
-      }
-    }
-    
-    // Update UI
-    updateMetricsDisplay();
-    
-    // Save metric to database (throttled - every 15 seconds)
-    if (!state.lastSaveTime || Date.now() - state.lastSaveTime > 15000) {
-      await saveMetric({
-        blinkRate,
-        avgEAR: 0.25,
-        strainProb
-      });
-      state.lastSaveTime = Date.now();
-    }
-  } catch (error) {
-    console.error('Frame processing error:', error);
-  }
-  
-  // Schedule next frame
-  const framerate = state.settings?.framerate || 10;
-  const delay = 1000 / framerate;
-  
-  setTimeout(() => {
-    state.animationFrameId = requestAnimationFrame(processFrame);
-  }, delay);
-}
+// Removed old processFrame - now using MediaPipe's onResults callback
 
 function updateStatusIndicator(status, text, message) {
   elements.statusIndicator.className = `status-indicator status-${status}`;
